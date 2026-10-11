@@ -1,0 +1,129 @@
+# ==========================================
+# Virtual Environments
+# ==========================================
+auto/
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
+.env
+.env.*
+!.env.example
+secrets.json
+credentials.json
+*.pem
+*.key
+
+# ==========================================
+# Bytecode, Compiler & Package Cache
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==========================================
+# AI / ML - Model Checkpoints & Weights
+# ==========================================
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.bin
+*.h5
+*.hdf5
+*.ckpt
+*.tflite
+checkpoints/
+models/
+saved_models/
+weights/
+
+# ==========================================
+# AI / ML - Datasets & Large Data Files
+# ==========================================
+data/
+dataset/
+datasets/
+raw_data/
+processed_data/
+*.parquet
+*.feather
+*.arrow
+
+# ==========================================
+# Vector Stores & Caches (LangChain, LlamaIndex, HF)
+# ==========================================
+.cache/
+hf_cache/
+huggingface/
+chroma_db/
+.chroma/
+vectorstore/
+faiss_index/
+*.faiss
+*.index
+
+# ==========================================
+# ML Tracking & Logs
+# ==========================================
+wandb/
+mlruns/
+lightning_logs/
+runs/
+tensorboard/
+logs/
+*.log
+
+# ==========================================
+# Jupyter Notebooks
+# ==========================================
+.ipynb_checkpoints/
+*-checkpoint.ipynb
+
+# ==========================================
+# Testing, Linting & Coverage
+# ==========================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# ==========================================
+# IDEs & System Files
+# ==========================================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
