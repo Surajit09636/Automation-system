@@ -44,6 +44,8 @@ class Prospect(models.Model):
     decision_maker_title = models.CharField(max_length = 255, blank = True)
     contact_email = models.EmailField(blank=True, null = False)
     linkedin_url = models.URLField(blank=True, null=True)
+    X_url = models.URLField(blank=True, null=True)
+    instagram_url = models.URLField(blank=True, null=True) 
 
     #Research and Scoring
     tech_stack_detected = models.JSONField(default=list, blank = True)
@@ -89,6 +91,7 @@ class OutreachDraft(models.Model):
         ('EMAIL', 'Cold Email'),
         ('LINKEDIN', 'LinkedIn Message / InMail'),
         ('TWITTER', 'Twitter / X DM'),
+        ('INSTAGRAM', 'Instagram DM'),
     ]
     STATUS_CHOICES = [
         ('PENDING_REVIEW', 'Pending Review'),

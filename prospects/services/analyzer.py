@@ -53,8 +53,13 @@ Analyze the business and return ONLY a valid JSON object with the following fiel
    - "title": Short title (e.g. "Slow product catalog load time")
    - "description": Why this hurts their business and how modernizing it helps
    - "evidence_snippet": Observed detail, quote, or flow from their site
-6. "email_subject": A short, intriguing cold email subject line (under 7 words).
-7. "email_body": A personalized cold email (under 120 words) citing one concrete observation from their site.
+6. "outreach_drafts": A dictionary containing platform-specific outreach messages:
+   - "email_subject": Short, intriguing cold email subject line (under 7 words).
+   - "email_body": Personalized cold email (under 120 words) citing one concrete observation from their site.
+   - "linkedin_message": Professional LinkedIn connection note or InMail (under 300 characters).
+   - "twitter_dm": Punchy, casual X/Twitter DM (under 240 characters) starting with a curiosity hook.
+   - "instagram_dm": Friendly, conversational Instagram DM (under 240 characters) tailored to their brand aesthetic/operations.
+
 Output ONLY valid JSON. Do not write any preamble, reasoning, or markdown outside the JSON.
 """
 
@@ -72,7 +77,7 @@ def extract_json(raw_text: str) -> dict:
     if start != -1 and end != -1:
         cleaned = cleaned[start:end + 1]
 
-    return json.loads(cleaned)
+    return json.loads(cleaned, strict=False)
 
 def execute_llms(chain_input: dict) -> tuple[dict, str]:
     prompt = ChatPromptTemplate.from_template(ANALYSIS_PROMPT)
@@ -107,7 +112,8 @@ def execute_llms(chain_input: dict) -> tuple[dict, str]:
 def analyze_and_save(scraped_data: dict) -> Prospect:
     """
     Orchestrates website analysis with automatic LLM fallback,
-    generates local embeddings, and saves prospects, Findings and Drafts.
+    generates local embeddings, saves prospects with multi-channel contacts,
+    and generates platform-specific OutreachDrafts for Email, LinkedIn, X, and Instagram.
     """
     if scraped_data.get("error"):
         raise ValueError(scraped_data["error"])
@@ -133,7 +139,8 @@ def analyze_and_save(scraped_data: dict) -> Prospect:
     summary_text = data.get("business_summary", "")
     summary_vec = get_text_embedding(summary_text)
 
-    # save the prospect
+    # Save the prospect with all harvested contact channels
+    contacts = scraped_data.get("contacts", {})
     match_score = float(data.get("match_score", 0.0))
     qualification_notes = f"[{provider_used}] " + data.get("qualification_notes", "")
 
@@ -142,6 +149,10 @@ def analyze_and_save(scraped_data: dict) -> Prospect:
         defaults={
             "company_name": data.get("company_name", scraped_data["domain"]),
             "domain": scraped_data["domain"],
+            "contact_email": contacts.get("email"),
+            "linkedin_url": contacts.get("linkedin_url"),
+            "X_url": contacts.get("x_url"),
+            "instagram_url": contacts.get("instagram_url"),
             "buisness_summery": summary_text,
             "summary_embedding": summary_vec,
             "match_score": match_score,
@@ -150,7 +161,7 @@ def analyze_and_save(scraped_data: dict) -> Prospect:
         }
     )
 
-    # save Opportunity Findings
+    # Save Opportunity Findings
     valid_categories = ["WEB_DEV", "BACKEND", "AUTOMATION", "PERFORMANCE", "UX_UI"]
     prospect.findings.all().delete()
     for opp in data.get("opportunities", []):
@@ -167,13 +178,53 @@ def analyze_and_save(scraped_data: dict) -> Prospect:
             evidence_url=scraped_data["url"]
         )
 
-    # Save Outreach Draft
+    # Save Multi-Channel Outreach Drafts (Email, LinkedIn, X, Instagram)
+    drafts_data = data.get("outreach_drafts", {})
     prospect.drafts.all().delete()
-    OutreachDraft.objects.create(
-        prospect=prospect,
-        channel="EMAIL",
-        subject=data.get("email_subject", "Quick observation regarding your website"),
-        body=data.get("email_body", ""),
-        status="PENDING_REVIEW",
-    )
+
+    # 1. Cold Email
+    email_body = drafts_data.get("email_body") or data.get("email_body", "")
+    email_subject = drafts_data.get("email_subject") or data.get("email_subject", "Quick observation regarding your website")
+    if email_body:
+        OutreachDraft.objects.create(
+            prospect=prospect,
+            channel="EMAIL",
+            subject=email_subject,
+            body=email_body,
+            status="PENDING_REVIEW",
+        )
+
+    # 2. LinkedIn InMail / Message
+    linkedin_msg = drafts_data.get("linkedin_message")
+    if linkedin_msg:
+        OutreachDraft.objects.create(
+            prospect=prospect,
+            channel="LINKEDIN",
+            subject="LinkedIn Message",
+            body=linkedin_msg,
+            status="PENDING_REVIEW",
+        )
+
+    # 3. Twitter / X DM
+    twitter_dm = drafts_data.get("twitter_dm")
+    if twitter_dm:
+        OutreachDraft.objects.create(
+            prospect=prospect,
+            channel="TWITTER",
+            subject="X / Twitter DM",
+            body=twitter_dm,
+            status="PENDING_REVIEW",
+        )
+
+    # 4. Instagram DM
+    instagram_dm = drafts_data.get("instagram_dm")
+    if instagram_dm:
+        OutreachDraft.objects.create(
+            prospect=prospect,
+            channel="INSTAGRAM",
+            subject="Instagram DM",
+            body=instagram_dm,
+            status="PENDING_REVIEW",
+        )
+
     return prospect

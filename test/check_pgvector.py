@@ -28,7 +28,7 @@ try:
             if ext:
                 print(f" pgvector extension is ACTIVE (v{ext[1]}).\n")
             else:
-                print("⚠️ pgvector extension is NOT enabled yet. Checking availability...")
+                print("[Warning] pgvector extension is NOT enabled yet. Checking availability...")
                 cur.execute("SELECT name, default_version FROM pg_available_extensions WHERE name = 'vector';")
                 available = cur.fetchone()
 
@@ -84,5 +84,5 @@ try:
     print("\n SUCCESS: pgvector is fully accessible and operational!")
 
 except Exception as err:
-    print(f"\n❌ FAILED: {type(err).__name__}")
+    print(f"\n[Failed] {type(err).__name__}")
     print(f"Details: {err}")
