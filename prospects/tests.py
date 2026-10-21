@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 
-# 1. Add project root to sys.path so 'prospects' can be imported
+# 1. Add project root to sys.path so 'prospects' and 'config' can be imported
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
 
@@ -18,37 +18,46 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 import django
 django.setup()
 
-# 3. Import prospecting orchestrator
-from prospects.services.orchestrator import run_portfolio_driven_prospecting
+from django.conf import settings
+from django.core.mail import send_mail
 
-# Set your portfolio or agency website URL here:
-MY_PORTFOLIO_URL = "https://surajitsutradhar.in"
-
-print("==========================================")
-print("[Pipeline] Starting Portfolio-Driven Client Discovery")
-print(f"[Pipeline] Portfolio URL: {MY_PORTFOLIO_URL}")
-print("==========================================")
-
-# Runs full flow: Portfolio Analysis -> Niche Discovery -> Contact Harvesting -> Multi-Channel Drafting
-prospects = run_portfolio_driven_prospecting(
-    portfolio_url=MY_PORTFOLIO_URL,
-    max_prospects_per_niche=2
+# 3. Test Email Configuration
+TEST_RECIPIENT = "surajitsutradhar010@gmail.com"
+SUBJECT = "Test Email - Automation Outreach System"
+MESSAGE = (
+    "Hello,\n\n"
+    "This is a test email sent from your Automation System via Brevo SMTP.\n"
+    "Your email outreach integration is successfully connected and working!\n\n"
+    "Best regards,\n"
+    "Automation Outreach System"
 )
 
-print(f"\n==========================================")
-print(f"[Results] Total Prospects Discovered & Analyzed: {len(prospects)}")
-print("==========================================")
+def test_send_email():
+    print("[Test] Starting Brevo SMTP Email Test")
+    print(f"[Config] Backend:  {settings.EMAIL_BACKEND}")
+    print(f"[Config] Host:     {settings.EMAIL_HOST}:{settings.EMAIL_PORT}")
+    print(f"[Config] TLS:      {settings.EMAIL_USE_TLS}")
+    print(f"[Config] User:     {settings.EMAIL_HOST_USER}")
+    print(f"[Config] From:     {settings.DEFAULT_FROM_EMAIL}")
+    print(f"[Config] To:       {TEST_RECIPIENT}")
 
-for p in prospects:
-    print(f"\n--- Company: {p.company_name} ({p.website_url}) ---")
-    print(f"Match Score: {p.match_score}/100 | Status: {p.status}")
-    print(f"Contacts: Email={p.contact_email} | LinkedIn={p.linkedin_url} | X={p.X_url} | IG={p.instagram_url}")
-    print(f"Findings: {p.findings.count()} opportunities identified")
-    
-    print("\nOutreach Drafts:")
-    for draft in p.drafts.all():
-        print(f"  [{draft.get_channel_display()}]")
-        if draft.subject:
-            print(f"  Subject: {draft.subject}")
-        print(f"  Message: {draft.body}")
-        print("  " + "-" * 35)
+    try:
+        print("[Sending] Connecting to Brevo SMTP and sending message...")
+        sent = send_mail(
+            subject=SUBJECT,
+            message=MESSAGE,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[TEST_RECIPIENT],
+            fail_silently=False,
+        )
+        
+        print(f"[Success] Email sent successfully! ({sent} message sent)")
+        print(f"[Success] Please check your inbox at: {TEST_RECIPIENT}")
+        
+    except Exception as e:
+        
+        print(f"[Error] Failed to send email: {e}")
+        print("[Tip] Ensure 'clasynq@gmail.com' is added as a verified sender in your Brevo dashboard under Senders & IP.")
+
+if __name__ == "__main__":
+    test_send_email()

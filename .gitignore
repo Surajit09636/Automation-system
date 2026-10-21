@@ -127,3 +127,13 @@ htmlcov/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ==========================================
+# Frontend & Node
+# ==========================================
+node_modules/
+*/node_modules/
+dist/
+build/
+.npm/
+frontend/

@@ -12,9 +12,9 @@ def Openrouter_llm():
     if not api_key:
         return None
     return ChatOpenAI(
-        model=os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"),
+        model=os.getenv("OPENROUTER_MODEL"),
         api_key=api_key,
-        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        base_url=os.getenv("OPENROUTER_BASE_URL"),
         temperature=0.2,
         timeout=45,
         max_retries=1,
@@ -25,7 +25,7 @@ def local_llm():
     return ChatOpenAI(
         model=os.getenv("OLLAMA_MODEL", "qwen3:4b"),
         api_key="ollama",
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1"),
+        base_url=os.getenv("OLLAMA_BASE_URL"),
         temperature=0.2,
         timeout=90,
         max_retries=1,
