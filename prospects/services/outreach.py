@@ -80,7 +80,9 @@ def dispatch_single_draft(draft, force=False):
             }
 
         subject = draft.subject or "Quick observation regarding your business"
-        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@surajitsutradhar.in")
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or getattr(settings, "EMAIL_HOST_USER", None)
+        if not from_email:
+            raise RuntimeError("DEFAULT_FROM_EMAIL or EMAIL_HOST_USER must be set in your environment.")
 
         try:
             print(f"[Outreach] Sending Email to {recipient} ({prospect.company_name})...")

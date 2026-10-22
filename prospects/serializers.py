@@ -63,6 +63,8 @@ class ProspectListSerializer(serializers.ModelSerializer):
             'website_url',
             'domain',
             'industry',
+            'category',
+            'location',
             'contact_email',
             'linkedin_url',
             'X_url',
@@ -93,6 +95,8 @@ class ProspectDetailSerializer(serializers.ModelSerializer):
             'website_url',
             'domain',
             'industry',
+            'category',
+            'location',
             'decision_maker_name',
             'decision_maker_title',
             'contact_email',
@@ -150,8 +154,8 @@ class BatchDispatchSerializer(serializers.Serializer):
     force = serializers.BooleanField(required=False, default=False)
 
 class AgentChatMessageSerializer(serializers.ModelSerializer):
-    text = serializers.CharField(source='content', read_only = True)
+    text = serializers.CharField(source='content', read_only=True)
 
     class Meta:
         model = AgentChatMessage
-        fields = ['id', 'prospect', 'role', 'text', 'created_at']
+        fields = ['id', 'prospect', 'session_id', 'role', 'text', 'created_at']

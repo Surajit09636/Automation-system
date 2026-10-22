@@ -9,12 +9,14 @@ from prospects.services.embeddings import get_text_embedding
 # LLM configure
 def Openrouter_llm():
     api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
+    model = os.getenv("OPENROUTER_MODEL")
+    base_url = os.getenv("OPENROUTER_BASE_URL")
+    if not (api_key and model and base_url):
         return None
     return ChatOpenAI(
-        model=os.getenv("OPENROUTER_MODEL"),
+        model=model,
         api_key=api_key,
-        base_url=os.getenv("OPENROUTER_BASE_URL"),
+        base_url=base_url,
         temperature=0.2,
         timeout=45,
         max_retries=1,
@@ -22,10 +24,14 @@ def Openrouter_llm():
 
 # fallback to local LLM
 def local_llm():
+    model = os.getenv("OLLAMA_MODEL")
+    base_url = os.getenv("OLLAMA_BASE_URL")
+    if not (model and base_url):
+        raise RuntimeError("OLLAMA_MODEL and OLLAMA_BASE_URL must be configured in your environment or .env file.")
     return ChatOpenAI(
-        model=os.getenv("OLLAMA_MODEL", "qwen3:4b"),
+        model=model,
         api_key="ollama",
-        base_url=os.getenv("OLLAMA_BASE_URL"),
+        base_url=base_url,
         temperature=0.2,
         timeout=90,
         max_retries=1,

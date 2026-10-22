@@ -38,12 +38,15 @@ class ProspectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         status_param = self.request.query_params.get('status')
+        category_param = self.request.query_params.get('category')
         min_score = self.request.query_params.get('min_score')
         search = self.request.query_params.get('search')
         ordering = self.request.query_params.get('ordering', '-match_score')
 
         if status_param:
             qs = qs.filter(status=status_param.upper())
+        if category_param:
+            qs = qs.filter(category=category_param.upper())
         if min_score:
             try:
                 qs = qs.filter(match_score__gte=float(min_score))
@@ -173,10 +176,19 @@ class ServiceProfileViewSet(viewsets.ModelViewSet):
         portfolio_url = request.data.get('portfolio_url')
         if not portfolio_url:
             active_profile = ServiceProfile.objects.filter(is_active=True).first()
-            portfolio_url = active_profile.portfolio_url if active_profile else "https://surajitsutradhar.in"
+            portfolio_url = active_profile.portfolio_url if (active_profile and active_profile.portfolio_url) else None
+
+        if not portfolio_url:
+            return Response(
+                {"error": "Please provide a valid portfolio URL to sync your services profile."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             profile = analyze_and_sync_portfolio(portfolio_url)
+            if request.user and request.user.is_authenticated:
+                profile.user = request.user
+                profile.save(update_fields=['user'])
             return Response(ServiceProfileSerializer(profile).data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -248,16 +260,47 @@ class DashboardStatsView(APIView):
 
 class AgentChatView(APIView):
     """
-    conversational agent endpoint with PostgreSQL presistence.
-    Support GET (fetch history), POST (chat & presist), & DELETE (clear history)
+    Production-ready multi-user conversational agent endpoint with PostgreSQL persistence.
+    Supports tenant & session isolation (authenticated user or client session ID).
     """
-    def get(self, request):
-        prospect_id = request.query_params.get('prospect_id')
-        if prospect_id:
-            messages = AgentChatMessage.objects.filter(prospect_id = prospect_id)
+
+    def get_user_scope(self, request):
+        """
+        Resolves caller identity via authenticated Django user or client session token.
+        """
+        user = request.user if (request.user and request.user.is_authenticated) else None
+        session_id = (
+            request.headers.get('X-Session-ID') or
+            (request.data.get('session_id') if isinstance(request.data, dict) else None) or
+            request.query_params.get('session_id')
+        )
+        return user, session_id
+
+    def get_messages_queryset(self, user, session_id, prospect_id=None, strict=False):
+        """
+        Filters messages strictly to the caller's tenant/session for full data isolation.
+        """
+        if user:
+            qs = AgentChatMessage.objects.filter(user=user)
+        elif session_id:
+            qs = AgentChatMessage.objects.filter(session_id=session_id)
         else:
-            messages = AgentChatMessage.objects.filter(prospect__isnull = True)
-        serializer = AgentChatMessageSerializer(messages, many = True)
+            if prospect_id:
+                qs = AgentChatMessage.objects.filter(prospect_id=prospect_id)
+            else:
+                qs = AgentChatMessage.objects.filter(prospect__isnull=True)
+
+        if strict and prospect_id:
+            qs = qs.filter(prospect_id=prospect_id)
+        return qs.order_by('created_at')
+
+    def get(self, request):
+        user, session_id = self.get_user_scope(request)
+        prospect_id = request.query_params.get('prospect_id')
+        strict = request.query_params.get('strict') == 'true'
+
+        messages = self.get_messages_queryset(user, session_id, prospect_id, strict)
+        serializer = AgentChatMessageSerializer(messages, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -268,16 +311,33 @@ class AgentChatView(APIView):
         if not user_message:
             return Response({"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST)
 
+        user, session_id = self.get_user_scope(request)
+
         prospect = None
         if prospect_id:
-            prospect = Prospect.objects.filter(id = prospect_id).first()
+            prospect = Prospect.objects.filter(id=prospect_id).first()
 
-        # save the user message to the database
+        # 1. Save user message tagged to caller's tenant/session
         user_msg = AgentChatMessage.objects.create(
-            prospect = prospect,
+            user=user,
+            session_id=session_id,
+            prospect=prospect,
             role='user',
             content=user_message
         )
+
+        # 2. Dynamically determine User & Agency Profile (NO hardcoded URLs)
+        active_profile = None
+        if user:
+            active_profile = ServiceProfile.objects.filter(user=user, is_active=True).first()
+            user_display_name = user.get_full_name() or user.username
+        else:
+            active_profile = ServiceProfile.objects.filter(is_active=True).first()
+            user_display_name = context.get('user_name') or "User"
+
+        portfolio_url = (active_profile.portfolio_url if (active_profile and active_profile.portfolio_url) else None) or context.get('user_portfolio') or "Not configured"
+        services_info = (active_profile.service_description if active_profile else None) or context.get('services_description') or "Custom software development, backend APIs, and workflow automation"
+        agency_name = (active_profile.name if active_profile else None) or context.get('agency_name') or "Agency"
 
         company_name = context.get("company_name") or (prospect.company_name if prospect else "None")
         channel = context.get("channel") or "EMAIL"
@@ -285,20 +345,46 @@ class AgentChatView(APIView):
         findings = ", ".join(context.get("findings") or [])
 
         system_prompt = (
-            "You are an expert AI Technical Outreach & Growth Agent for an automation agency.\n"
-            f"Active Prospect: {company_name}\n"
+            "You are an expert AI Technical Outreach & Growth Agent working directly with the user.\n"
+            f"User Name / Identity: {user_display_name}\n"
+            f"User Agency / Organization: {agency_name}\n"
+            f"User Agency Offering: {services_info}\n"
+            f"User Portfolio URL: {portfolio_url}\n\n"
+            f"Active Prospect Under Review: {company_name}\n"
             f"Outreach Channel: {channel}\n"
             f"Current Draft: {current_draft}\n"
             f"Detected Opportunities: {findings}\n\n"
-            "Task: Assist the user in refining outreach drafts, analyzing technical angles, or answering questions.\n"
+            "Task: Assist the user in refining outreach drafts, analyzing technical angles, answering questions, and recalling conversation context.\n"
+            "Always remember user details, preferences, names, and guidelines shared in this conversation.\n"
             "If asked to rewrite or improve a draft, output ONLY the revised message copy ready to be sent.\n"
-            "Keep explanations direct, punchy, and professional."
+            "Keep explanations direct, punchy, and professional.\n\n"
+            "FORMATTING GUIDELINES:\n"
+            "- When outputting tables, use valid GitHub Flavored Markdown with every row on its own line and standard pipes. Leave a blank line before and after the table.\n"
+            "- Never combine table rows onto a single line.\n"
+            "- Use clean bullet points and short structured paragraphs for scannability."
         )
 
+        # 3. Retrieve multi-turn history strictly for this caller's tenant/session
         llm_messages = [{"role": "system", "content": system_prompt}]
-        past_msgs = (
-            AgentChatMessage.objects.filter(prospect=prospect).exclude(id = user_msg.id).order_by('-created_at')[:10]
-        )
+        if user:
+            past_msgs = (
+                AgentChatMessage.objects.filter(user=user)
+                .exclude(id=user_msg.id)
+                .order_by('-created_at')[:15]
+            )
+        elif session_id:
+            past_msgs = (
+                AgentChatMessage.objects.filter(session_id=session_id)
+                .exclude(id=user_msg.id)
+                .order_by('-created_at')[:15]
+            )
+        else:
+            past_msgs = (
+                AgentChatMessage.objects.filter(prospect=prospect)
+                .exclude(id=user_msg.id)
+                .order_by('-created_at')[:15]
+            )
+
         for m in reversed(list(past_msgs)):
             llm_messages.append({"role": m.role, "content": m.content})
         llm_messages.append({"role": "user", "content": user_message})
@@ -320,8 +406,10 @@ class AgentChatView(APIView):
             except Exception as e:
                 return Response({"error": f"Model error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Save assistant reply to the database
+        # 4. Save assistant reply tagged to caller's tenant/session
         assistant_msg = AgentChatMessage.objects.create(
+            user=user,
+            session_id=session_id,
             prospect=prospect,
             role='assistant',
             content=reply_text
@@ -334,9 +422,10 @@ class AgentChatView(APIView):
         }, status=status.HTTP_200_OK)
 
     def delete(self, request):
+        user, session_id = self.get_user_scope(request)
         prospect_id = request.query_params.get("prospect_id")
-        if prospect_id:
-            AgentChatMessage.objects.filter(prospect_id=prospect_id).delete()
-        else:
-            AgentChatMessage.objects.filter(prospect__isnull=True).delete()
+        strict = request.query_params.get('strict') == 'true'
+
+        qs = self.get_messages_queryset(user, session_id, prospect_id, strict)
+        qs.delete()
         return Response({"status": "cleared"}, status=status.HTTP_200_OK)

@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from pgvector.django import VectorField
 
 class ServiceProfile(models.Model):
@@ -6,7 +7,13 @@ class ServiceProfile(models.Model):
     Stores agencies/freelancer services, skills, portfolio highlights and blah blah blah,
     with vectorrepresentations for semantic matching.
     """
-
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='service_profiles'
+    )
     name = models.CharField(max_length = 255, default = "Default Feature")
     portfolio_url = models.URLField(blank = True, null = True)
     service_description = models.TextField(help_text="Detsiled Description of services offered")
@@ -36,10 +43,20 @@ class Prospect(models.Model):
         ('RESPONDED', 'Responded'),
     ]
 
+    CATEGORY_CHOICES = [
+        ('LOCAL_BUSINESS', 'Local Business'),
+        ('STARTUP_FOUNDER', 'Startup Founder / Indie Maker'),
+        ('SMALL_AGENCY', 'Small Digital Agency'),
+        ('CONSULTANT', 'Consultant / Lead-Gen'),
+        ('CREATOR', 'Creator / Personal Brand'),
+    ]
+
     company_name = models.CharField(max_length=255)
     website_url = models.URLField(unique=True)
     domain = models.CharField(max_length=255, blank = True)
     industry = models.CharField(max_length=255, blank = True)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='LOCAL_BUSINESS', blank=True)
+    location = models.CharField(max_length=255, blank=True)
     decision_maker_name = models.CharField(max_length = 255, blank = True)
     decision_maker_title = models.CharField(max_length = 255, blank = True)
     contact_email = models.EmailField(blank=True, null = False)
@@ -117,6 +134,7 @@ class OutreachDraft(models.Model):
 class AgentChatMessage(models.Model):
     """
     Persists conversational chat history between user and AI agent in PostgreSQL.
+    Scoped by user (authenticated) or session_id (guest/client) for full multi-tenant isolation.
     """
     ROLE_CHOICES = [
         ('user', 'User'),
@@ -124,6 +142,20 @@ class AgentChatMessage(models.Model):
         ('system', 'System'),
     ]
 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='agent_chat_messages'
+    )
+    session_id = models.CharField(
+        max_length=128,
+        db_index=True,
+        blank=True,
+        null=True,
+        help_text="Client session token for unauthenticated or multi-tenant guest chats"
+    )
     prospect = models.ForeignKey(
         Prospect,
         on_delete=models.CASCADE,
@@ -140,4 +172,5 @@ class AgentChatMessage(models.Model):
 
     def __str__(self):
         target = self.prospect.company_name if self.prospect else "Global"
-        return f"[{self.role}] {target} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+        user_info = self.user.username if self.user else (self.session_id[:8] if self.session_id else "Anon")
+        return f"[{self.role}] ({user_info}) {target} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
